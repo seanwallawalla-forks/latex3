@@ -21,6 +21,7 @@
 \usepackage{tikz}
 \usepackage{underscore}
 \usepackage{xparse}
+\usepackage{titletoc}
 \usepackage{hyperref}
 \hypersetup{colorlinks}
 \usepackage{bookmark}
@@ -34,6 +35,7 @@
   }
 
 \makeatletter
+\def\ttl@gobblecontents#1#2#3#4{\ignorespaces}
 \newcounter{issue}
 \renewcommand*{\theissue}{%
   \ifnum\value{issue}<10 0\fi
@@ -91,6 +93,7 @@
 
 \makefirsttitle
 \pdfbookmark[0]{\contentsname}{toc}
+\setcounter{tocdepth}{2}
 \tableofcontents
 \clearpage
 
@@ -108,6 +111,7 @@
   \let\org@twocolumn\twocolumn
   \renewenvironment{document}{%
     \clearpage
+    \let\ltn@tocend\relax
     \ifnum\@issue=20 %
       \addtocontents{toc}{\protect\setcounter{tocdepth}{5}}%
       \addtocontents{toc}{%
@@ -126,19 +130,11 @@
       }%
       \def\toclevel@subsection{1}%
       \def\toclevel@subsubsection{2}%
-      \addtocontents{toc}{\protect\setcounter{tocdepth}{4}}%
       \renewcommand*{\tableofcontents}{%
         \section*{\contentsname}%
-        \@starttoc{toc\theissue}%
-      }%
-      \let\saved@addtocontents\addtocontents
-      \renewcommand*{\addtocontents}[2]{%
-        \saved@addtocontents{##1}{##2}%
-        \def\temp@toc{toc}%
-        \def\temp@param{##1}%
-        \ifx\temp@toc\temp@param
-          \saved@addtocontents{toc\theissue}{##2}%
-        \fi
+        \startcontents[Issue\theissue]%
+        \printcontents[Issue\theissue]{}{1}[3]{}%
+        \gdef\ltn@tocend{\stopcontents[Issue\theissue]}%
       }%
       \let\l@subsubsection\l@subsection
       \let\l@subsection\l@section
@@ -161,6 +157,7 @@
       \endgroup
     }%
   }{%
+    \ltn@tocend
     \clearpage
   }%
   \def\MakeOuterQuote#1{%

@@ -105,6 +105,7 @@ tlmgr install \
   refcount    \
   rerunfilecheck \
   times       \
+  titlesec    \
   underscore  \
   uniquecounter
 
