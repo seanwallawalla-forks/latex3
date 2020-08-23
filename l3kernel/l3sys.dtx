@@ -955,6 +955,155 @@
 %    \end{macrocode}
 % \end{variable}
 %
+% \subsection{Emulating \TeX's interactive mode}
+%
+% \begin{macro}{\sys_interact:}
+%   This starts interaction but only in \cs{errorstopmode}.
+%   A |?| prompt is printed and it waits for user input, then calls
+%   \cs{@@_interact:n} on the first token.
+%    \begin{macrocode}
+\cs_new_protected:Npn \sys_interact:
+  {
+    \int_compare:nNnT { \tex_interactionmode:D } = { 3 }
+      {
+        \tex_message:D { \iow_newline: ?!?! ~ }
+        \ior_str_get_term:nN { } \l_@@_internal_tl
+        \exp_args:Nx \@@_interact:n { \tl_head:N \l_@@_internal_tl }
+      }
+  }
+%   \cs{@@_interact:n} checks if the requested action exists;  if not,
+%   the action may be a number of tokens to delete, or invalid.
+\cs_new_protected:Npn \@@_interact:n #1
+  {
+    \cs_if_exist_use:cF { _@@_action_ \char_uppercase:N #1 : }
+      {
+        \if_int_compare:w 9 < 1 \token_to_str:N #1 \exp_stop_f:
+          \exp_after:wN \use_ii:nnn
+        \fi:
+        \use_ii:nn
+          { \@@_action_delete_tokens:n {#1} }
+          {
+            \@@_help_print:
+            \sys_interact:
+          }
+      }
+  }
+%   No action:
+\cs_new_protected:Npn \@@_action_: { }
+%   Enter scrollmode:
+\cs_new_protected:Npn \@@_action_S: { \tex_scrollmode:D }
+%   Enter nonstopmode:
+\cs_new_protected:Npn \@@_action_R: { \tex_nonstopmode:D }
+%   Enter batchmode:
+\cs_new_protected:Npn \@@_action_Q: { \tex_batchmode:D }
+%   Insert tokens.
+%   The token list was read as a string, so we need to rescan.
+%   TODO: maybe everyhting has to be read with normal catcodes then
+%         stringified to detect the action; no need to rescanning here
+%         in that case...
+\cs_new_protected:Npn \@@_action_I:
+  {
+    \tl_set_rescan:Nnx \l_@@_internal_tl { }
+      { \tl_tail:N \l_@@_internal_tl }
+    \tl_use:N \l_@@_internal_tl
+  }
+%   Edit the file.
+%   Currently this uses \CurrentFile or \jobname, both of which are not
+%   always true.  I think primitive support is required to print the
+%   correct file name here.  Besides this doesn't open an editor as
+%   TeX does.  Is there even a way to do that?
+\cs_new_protected:Npn \@@_action_E:
+  {
+    \tex_message:D { You~want~to~edit~file }
+    \tex_message:D
+      {
+        \tl_if_empty:NTF \CurrentFile
+          { \c_sys_jobname_str }
+          { \CurrentFile }
+      }
+    \tex_message:D { at~line~\int_use:N \tex_inputlineno:D }
+    \@@_action_X:
+  }
+%   Print \errhelp.  I think this doesn't work exactly like TeX yet.
+\cs_new_protected:Npn \@@_action_H:
+  {
+    \tl_if_empty:oT { \tex_the:D \tex_errhelp:D }
+      {
+        \exp_args:Nx \tex_errhelp:D
+          {
+            Sorry,~I~already~gave~what~help~I~could... \iow_newline:
+            Maybe~you~should~try~asking~a~human? \iow_newline:
+            An~error~might~have~occurred~
+              before~I~noticed~any~problems. \iow_newline:
+            ``If~all~else~fails,~read~the~instructions.''
+          }
+      }
+    \tex_message:D { \tex_the:D \tex_errhelp:D }
+    \tex_errhelp:D = { }
+    \sys_interact:
+  }
+%   Exit.  At least this one works... kinda
+\cs_new_protected:Npn \@@_action_X:
+  { \tex_batchmode:D \tex_read:D -1~to~\l_@@_internal_tl }
+%   Delete up to 99 tokens
+\int_new:N \l_@@_internal_int
+\cs_new_protected:Npn \@@_action_delete_tokens:n #1
+  {
+    \exp_args:Nx \@@_action_delete_tokens:nn
+      { \tl_item:Nn \l_@@_internal_tl { 2 } } {#1}
+  }
+%   TeX ignores the second input token if not a number
+\cs_new_protected:Npn \@@_action_delete_tokens:nn #1 #2
+  {
+    \if_int_compare:w 9 < 1 \token_to_str:N #1 \exp_stop_f:
+      \int_set:Nn \l_@@_internal_int {#2#1}
+    \else:
+      \int_set:Nn \l_@@_internal_int {#2}
+    \fi:
+    \@@_action_delete_tokens_loop:w
+  }
+%   Recursively delete tokens using \verb*|\let\tmp= |.  Needs checking
+%   how well this performs with different types of tokens and inside
+%   alignments.
+\cs_new_protected:Npn \@@_action_delete_tokens_loop:w
+  {
+    \tex_message:D { >~\token_to_meaning:N \l_@@_internal_tl ^^J }
+    \int_compare:nNnTF \l_@@_internal_int = 0
+      { \@@_action_delete_tokens_end:w }
+      { \int_decr:N \l_@@_internal_int }
+    \tex_afterassignment:D \@@_action_delete_tokens_loop:w
+    \tex_let:D \l_@@_internal_tl = ~
+  }
+%   At the end set the error help and call for interaction again.
+%   After deleting a bunch of tokens TeX does |show_context|.  Is it
+%   possible to do that without raising another error?
+\cs_new_protected:Npn \@@_action_delete_tokens_end:w #1 = ~
+  {
+    \exp_args:Nx \tex_errhelp:D
+      {
+        I~have~just~deleted~some~text,~as~you~asked. \iow_newline:
+        You~can~now~delete~more,~or~insert,~or~whatever.
+      }
+    \sys_interact:
+  }
+%   Help message
+\cs_new_protected:Npn \@@_help_print:
+  {
+    \tex_message:D
+      {
+        Type~<return>~to~proceed,~
+        S~to~scroll~future~error~messages, \iow_newline:
+        R~to~run~without~stopping,~
+        Q~to~run~quietly, \iow_newline:
+        I~to~insert~something,~
+        E~to~edit~your~file, \iow_newline:
+        1~or~...~or~9~to~ignore~the~next~1~to~9~tokens~of~input, \iow_newline:
+        H~for~help,~
+        X~to~quit.
+      }
+  }
+%    \end{macrocode}
+%
 %    \begin{macrocode}
 %</package>
 %    \end{macrocode}
