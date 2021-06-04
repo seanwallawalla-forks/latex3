@@ -17,5 +17,5 @@ Don't change this file in any respect.
 \tex_pdfoutput:D=\outputmode
 \tex_pdfrefxform:D=\useboxresource
 \tex_pdfrefximage:D=\useimageresource
-\tex_pdfxform:D=\saveboxresource
+\tex_pdfxform:D=luacall 13
 \tex_pdfximage:D=\saveimageresource

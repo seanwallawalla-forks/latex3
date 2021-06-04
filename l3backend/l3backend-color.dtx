@@ -1322,15 +1322,17 @@ local texio  = texio
 %
 %   Local copies of standard functions.
 %    \begin{macrocode}
-local module_error  = luatexbase.module_error
-local has_attribute = node.has_attribute
-local id            = node.id
-local insert_before = node.insert_before
-local node_new      = node.new
-local node_traverse = node.traverse
-local set_attribute = tex.setattribute
-local type          = node.type
-local subtype       = node.subtype
+local getbox           = tex.getbox
+local has_attribute    = node.has_attribute
+local id               = node.id
+local insert_before    = node.insert_before
+local module_error     = luatexbase.module_error
+local node_new         = node.new
+local node_traverse    = node.traverse
+local saveboxresources = tex.saveboxresources
+local set_attribute    = tex.setattribute
+local type             = node.type
+local subtype          = node.subtype
 %    \end{macrocode}
 %
 % \begin{macro}{ltx.color.select}
@@ -1547,6 +1549,63 @@ if luaotfload and luaotfload.set_colorhandler then
 end
 %    \end{macrocode}
 %
+% \begin{macro}{luacmd}
+%   Copied from \pkg{l3luatex}: we need to think about how to make this available
+%   (perhaps in |ltx.utils|?).
+%    \begin{macrocode}
+local luacmd do
+  local token_create = token.create
+  local set_lua = token.set_lua
+  local undefined_cs = token.command_id'undefined_cs'
+
+  if not context and not luatexbase then require'ltluatex' end
+  if luatexbase then
+    local new_luafunction = luatexbase.new_luafunction
+    local functions = lua.get_functions_table()
+    function luacmd(name, func, ...)
+      local id
+      local tok = token_create(name)
+      if tok.command == undefined_cs then
+        id = new_luafunction(name)
+        set_lua(name, id, ...)
+      else
+        id = tok.index or tok.mode
+      end
+      functions[id] = func
+    end
+  elseif context then
+    local register = context.functions.register
+    local functions = context.functions.known
+    function luacmd(name, func, ...)
+      local tok = token.create(name)
+      if tok.command == undefined_cs then
+        token.set_lua(name, register(func), ...)
+      else
+        functions[tok.index or tok.mode] = func
+      end
+    end
+  end
+end
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{\tex_pdfxform:D}
+%   We redefine the \pkg{expl3} version of the primitive to do the replacement
+%   implicitly. The keywords \texttt{margin} and \texttt{type} are not
+%   documented at the \TeX{} level.
+%    \begin{macrocode}
+luacmd('tex_pdfxform:D', function()
+  local attr = scan_keyword'attr' and scan_string() or nil
+  local resources = scan_keyword'length' and scan_string() or nil
+  local xtype = scan_keyword'type' and scan_string() or nil
+  local margin = scan_keyword'margin' and scan_string() or nil
+  local n = scan_int() or nil
+  traverse(getbox(n),"")
+  saveboxresources(n,attr,resources,false,xtype,margin)
+end,'global','protected')
+%    \end{macrocode}
+% \end{macro}
+%
 %    \begin{macrocode}
 %</lua>
 %    \end{macrocode}
@@ -1562,7 +1621,9 @@ end
 %<*luatex>
 %    \end{macrocode}
 %
+% This needs some work: undefine from Lua?
 %    \begin{macrocode}
+\cs_undefine:N \tex_pdfxform:D
 \lua_now:n { require("l3backend-luatex") }
 %    \end{macrocode}
 %
