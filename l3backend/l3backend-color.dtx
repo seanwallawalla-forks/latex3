@@ -411,7 +411,10 @@
 %   }
 % \begin{macro}{\@@_backend_select:nn}
 % \begin{macro}{\@@_backend_reset:}
-%   Store the values then pass to the stack.
+% \begin{macro}{\@@_backend_stack_push:nn}
+%   Store the values then pass to the stack. The abstraction here allows for
+%   transparency needing the same fundamental approach but with switchable
+%   code for \LuaTeX{}.
 %    \begin{macrocode}
 \cs_new_protected:Npn \@@_backend_select_cmyk:n #1
   { \@@_backend_select:nn { #1 ~ k } { #1 ~ K } }
@@ -423,12 +426,14 @@
   {
     \tl_set:Nn \l_@@_backend_fill_tl {#1}
     \tl_set:Nn \l_@@_backend_stroke_tl {#2}
-    \__kernel_color_backend_stack_push:nn \l_@@_backend_stack_int { #1 ~ #2 }
+    \@@_backend_stack_push:nn \l_@@_backend_stack_int { #1 ~ #2 }
     \group_insert_after:N \@@_backend_reset:
   }
 \cs_new_protected:Npn \@@_backend_reset:
   { \__kernel_color_backend_stack_pop:n \l_@@_backend_stack_int }
+\cs_new_eq:NN \@@_backend_stack_push:nn \__kernel_color_backend_stack_push:nn
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 % \end{macro}
 % \end{macro}
@@ -982,7 +987,7 @@
 \cs_new_protected:Npn \@@_backend_fill:n #1
   {
     \tl_set:Nn \l_@@_backend_fill_tl {#1}
-    \__kernel_color_backend_stack_push:nn \l_@@_backend_stack_int
+    \@@_backend_stack_push:nn \l_@@_backend_stack_int
       { #1 ~ \l_@@_backend_stroke_tl }
     \group_insert_after:N \@@_backend_reset:
   }
@@ -995,7 +1000,7 @@
 \cs_new_protected:Npn \@@_backend_stroke:n #1
   {
     \tl_set:Nn \l_@@_backend_stroke_tl {#1}
-    \__kernel_color_backend_stack_push:nn \l_@@_backend_stack_int
+    \@@_backend_stack_push:nn \l_@@_backend_stack_int
       { \l_@@_backend_fill_tl \c_space_tl #1 }
     \group_insert_after:N \@@_backend_reset:
   }
@@ -1242,6 +1247,340 @@
 %
 %    \begin{macrocode}
 %</dvisvgm>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%</package>
+%    \end{macrocode}
+%
+% \subsection{Color in \LuaTeX{}}
+%
+%    \begin{macrocode}
+%<*lua>
+%    \end{macrocode}
+%
+% In \LuaTeX{}, we can use an approach based on attributes to avoid having to
+% insert whatsits. That means having the appropriate supporting Lua code. The
+% underlying idea comes from Heiko Oberdiek's \pkg{luacolor} package.
+%
+% \begin{macro}{ltx.color}
+% \begin{macro}{ltxcolor}
+%   The basic table should be set up in \pkg{l3luatex}, but we want a separate
+%   sub-table for color.
+%    \begin{macrocode}
+ltx = ltx or {color = {}}
+ltx.color = ltx.color or {}
+local ltxcolor = ltx.color
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+% Load basic support and print some information.
+%    \begin{macrocode}
+require("ltluatex")
+local luatexbase = luatexbase
+luatexbase.provides_module({name = "l3backend-luatex", date = "2021-06-03"})
+%    \end{macrocode}
+%
+% \begin{macro}{attr}
+%   An attribute to track color. There is no need to access this from \TeX{} so
+%   in contrast to \pkg{luacolor} we just allocate directly in Lua.
+%    \begin{macrocode}
+local color_attr = luatexbase.new_attribute("color")
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{map}
+%   A map between color strings and their color_index, plus the tracking number.
+%    \begin{macrocode}
+local map = {n = 0}
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{color_index}
+%   Get the color_index of a color or create a new color_index if necessary.
+%    \begin{macrocode}
+local function color_index(color)
+  local n = map[color]
+  if not n then
+    n = map.n + 1
+    map[n] = color
+    map[color] = n
+  end
+  return n
+end
+%    \end{macrocode}
+% \end{macro}
+%
+%   Local copies of global tables.
+%    \begin{macrocode}
+local node   = node
+local string = string
+local tex    = tex
+local texio  = texio
+%    \end{macrocode}
+%
+%   Local copies of standard functions.
+%    \begin{macrocode}
+local module_error  = luatexbase.module_error
+local has_attribute = node.has_attribute
+local id            = node.id
+local insert_before = node.insert_before
+local node_new      = node.new
+local node_traverse = node.traverse
+local set_attribute = tex.setattribute
+local type          = node.type
+local subtype       = node.subtype
+%    \end{macrocode}
+%
+% \begin{macro}{ltx.color.select}
+%   Get the color_index of a color or create a new color_index if necessary.
+%    \begin{macrocode}
+local function select(color_str)
+  set_attribute(color_attr,color_index(color_str))
+end
+ltxcolor.select = select
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{node_map, node_types,literals}
+%   We abstract the idea of different types of node where it makes sense:
+%   notice for example that in contrast to \pkg{luacolor} we extract some
+%   one-off information in the function that needs it. We also use a single
+%   local \enquote{map} for the node values.
+%    \begin{macrocode}
+local node_map = {
+    list         = 1 ,
+    list_leaders = 2 ,
+    list_disc    = 3 ,
+    color        = 4 ,
+    no_color     = 5
+  }
+local node_types = {
+    [id("hlist")]   = node_map.list      ,
+    [id("vlist")]   = node_map.list      ,
+    [id("rule")]    = node_map.color     ,
+    [id("glyph")]   = node_map.color     ,
+    [id("disc")]    = node_map.list_disc ,
+    [id("whatsit")] = {
+        [subtype("pdf_colorstack")] =
+          function(n) return n.stack == 0 and node_map.no_color or nil end ,
+        [subtype("special")]     = node_map.color ,
+        [subtype("pdf_literal")] = node_map.color ,
+        [subtype("pdf_save")]    = node_map.color ,
+        [subtype("pdf_restore")] = node_map.color ,
+      } ,
+    [id("glue")] =
+      function(n)
+        if n.subtype >= 100 then
+          if n.leader.id == id("rule") then
+            return node_map.color
+          else
+            return node_map.list_leaders
+          end
+        end
+      end
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{node_map, node_types,literals}
+%   We abstract the idea of different types of node where it makes sense:
+%   notice for example that in contrast to \pkg{luacolor} we extract some
+%   one-off information in the function that needs it. We also use a single
+%   local \enquote{map} for the node values.
+%    \begin{macrocode}
+local node_map = {
+    list         = 1 ,
+    list_leaders = 2 ,
+    list_disc    = 3 ,
+    color        = 4 ,
+    no_color     = 5
+  }
+local node_types = {
+    [id("hlist")]   = node_map.list      ,
+    [id("vlist")]   = node_map.list      ,
+    [id("rule")]    = node_map.color     ,
+    [id("glyph")]   = node_map.color     ,
+    [id("disc")]    = node_map.list_disc ,
+    [id("whatsit")] = {
+        [subtype("pdf_colorstack")] =
+          function(n) return n.stack == 0 and node_map.no_color or nil end ,
+        [subtype("special")]     = node_map.color ,
+        [subtype("pdf_literal")] = node_map.color ,
+        [subtype("pdf_save")]    = node_map.color ,
+        [subtype("pdf_restore")] = node_map.color
+      } ,
+    [id("glue")] =
+      function(n)
+        if n.subtype >= 100 then
+          if n.leader.id == id("rule") then
+            return node_map.color
+          else
+            return node_map.list_leaders
+          end
+        end
+      end
+  }
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{get_type}
+%   Convert a node into the type, allowing for tables and functions.
+%    \begin{macrocode}
+local function get_type(n)
+  local ret = node_types[n.id]
+  if type(ret) == "table" then
+    ret = ret[n.subtype]
+  end
+  if type(ret) == "function" then
+    ret = ret(n)
+  end
+  return ret
+end
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{create_node}
+%   Create the the node containing color data. The mode is hard-coded as $2$:
+%   a PDF literal.
+%    \begin{macrocode}
+local function create_node(color)
+  local color_node = node_new(id("whatsit"),subtype("pdf_literal"))
+  color_node.mode = 2
+  color_node.data = color
+  return color_node
+end
+%    \end{macrocode}
+% \end{macro}
+%
+% \begin{macro}{traverse}
+%   The business end of the process: transverse the node list.
+%    \begin{macrocode}
+local function traverse(list,color,dry_run)
+%    \end{macrocode}
+%   We start with a sanity check: do we have a list at all.
+%    \begin{macrocode}
+  if not list then
+    return color
+  end
+%    \end{macrocode}
+%   Work out the type of head we have: should be a |list| or |list_disc|.
+%    \begin{macrocode}
+  local head
+  if get_type(list) == node_map.list then
+    head = list.head
+  elseif get_type(list) == node_map.list_disc then
+    head = list.replace
+  else
+    module_error("l3color","Wrong list type: " .. type(list.id))
+    return color
+  end
+%    \end{macrocode}
+%   The main loop. We have various bits of recursion to do to map over
+%   the lists, before we get to the business end: color nodes.
+%    \begin{macrocode}
+  for n in node_traverse(head) do
+    local t = get_type(n)
+    if t == node_map.list or t == node_map.list_disc then
+      color = traverse(n,color,dry_run)
+    elseif t == node_map.list_leaders then
+      local color_after = traverse(n.leader,color,true)
+      if color == color_after then
+        traverse(n.leader,color,dry_run)
+      else
+        traverse(n.leader,"",dry_run)
+        color = ""
+      end
+    elseif t == node_map.color then
+      local c = has_attribute(n,color_attr)
+      if c then
+        local new_color = map[c]
+        if new_color ~= color then
+          color = new_color
+          if not dry_run then
+            print("NEW NODE")
+            head = insert_before(head,n,create_node(color))
+          end
+        end
+      end
+    elseif t == node_map.no_color then
+      color = ""
+    end
+  end
+%    \end{macrocode}
+%   Loop done, set up the list.
+%    \begin{macrocode}
+  if get_type(list) == node_map.list then
+    list.head = head
+  else
+    list.replace = head
+  end
+  return color
+end
+%    \end{macrocode}
+% \end{macro}
+%
+% Activate the code: we assume that the |pre_shipout_filter| callback is
+% available as this is pretty burning-edge stuff.
+%    \begin{macrocode}
+if luatexbase.callbacktypes.pre_shipout_filter then
+  luatexbase.add_to_callback(
+    "pre_shipout_filter",
+    function(list)
+      traverse(list,"")
+      return true
+    end,
+    "color")
+end
+%    \end{macrocode}
+%
+% For recent versions of \pkg{luaotfload}, we can register a callback to
+% control how coloring glyph is handled for the color feature.
+%    \begin{macrocode}
+if luaotfload and luaotfload.set_colorhandler then
+  local set_attribute = node.direct.set_attribute
+  luaotfload.set_colorhandler(function(head,n,color)
+    set_attribute(n,attribute,color_index(color))
+    return head,n
+  end)
+end
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%</lua>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+%<*package>
+%    \end{macrocode}
+%
+% At present we only set up for \LuaTeX{} in PDF mode: later we will expand
+% on that!
+%
+%    \begin{macrocode}
+%<*luatex>
+%    \end{macrocode}
+%
+%    \begin{macrocode}
+\lua_now:n { require("l3backend-luatex") }
+%    \end{macrocode}
+%
+% \begin{macro}{\@@_backend_stack_push:nn}
+% \begin{macro}{\@@_backend_reset:}
+%   A simple reworking: we may need to check about transparency here.
+%    \begin{macrocode}
+\cs_gset_protected:Npn \@@_backend_stack_push:nn #1#2
+  {
+    \lua_now:e { ltx.color.select(" \lua_escape:n {#2} ") }
+  }
+\cs_gset_protected:Npn \@@_backend_reset: { }
+%    \end{macrocode}
+% \end{macro}
+% \end{macro}
+%
+%    \begin{macrocode}
+%</luatex>
 %    \end{macrocode}
 %
 %    \begin{macrocode}
