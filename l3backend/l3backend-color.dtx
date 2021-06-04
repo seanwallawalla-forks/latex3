@@ -1501,7 +1501,6 @@ local function traverse(list,color,dry_run)
         if new_color ~= color then
           color = new_color
           if not dry_run then
-            print("NEW NODE")
             head = insert_before(head,n,create_node(color))
           end
         end
