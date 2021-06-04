@@ -1385,47 +1385,6 @@ local node_types = {
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{node_map, node_types,literals}
-%   We abstract the idea of different types of node where it makes sense:
-%   notice for example that in contrast to \pkg{luacolor} we extract some
-%   one-off information in the function that needs it. We also use a single
-%   local \enquote{map} for the node values.
-%    \begin{macrocode}
-local node_map = {
-    list         = 1 ,
-    list_leaders = 2 ,
-    list_disc    = 3 ,
-    color        = 4 ,
-    no_color     = 5
-  }
-local node_types = {
-    [id("hlist")]   = node_map.list      ,
-    [id("vlist")]   = node_map.list      ,
-    [id("rule")]    = node_map.color     ,
-    [id("glyph")]   = node_map.color     ,
-    [id("disc")]    = node_map.list_disc ,
-    [id("whatsit")] = {
-        [subtype("pdf_colorstack")] =
-          function(n) return n.stack == 0 and node_map.no_color or nil end ,
-        [subtype("special")]     = node_map.color ,
-        [subtype("pdf_literal")] = node_map.color ,
-        [subtype("pdf_save")]    = node_map.color ,
-        [subtype("pdf_restore")] = node_map.color
-      } ,
-    [id("glue")] =
-      function(n)
-        if n.subtype >= 100 then
-          if n.leader.id == id("rule") then
-            return node_map.color
-          else
-            return node_map.list_leaders
-          end
-        end
-      end
-  }
-%    \end{macrocode}
-% \end{macro}
-%
 % \begin{macro}{get_type}
 %   Convert a node into the type, allowing for tables and functions.
 %    \begin{macrocode}
