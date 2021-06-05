@@ -1344,40 +1344,47 @@ ltxcolor.select = select
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{node_map, node_types,literals}
+% \begin{macro}
+%   {
+%     id_list         ,
+%     id_list_leaders ,
+%     id_list_disc    ,
+%     id_color        ,
+%     id_no_color     ,
+%     node_types      ,
+%     literals
+%   }
 %   We abstract the idea of different types of node where it makes sense:
 %   notice for example that in contrast to \pkg{luacolor} we extract some
 %   one-off information in the function that needs it. We also use a single
 %   local \enquote{map} for the node values.
 %    \begin{macrocode}
-local node_map = {
-    list         = 1 ,
-    list_leaders = 2 ,
-    list_disc    = 3 ,
-    color        = 4 ,
-    no_color     = 5
-  }
+local id_list         = 1
+local id_list_leaders = 2
+local id_list_disc    = 3
+local id_color        = 4
+local id_no_color     = 5
 local node_types = {
-    [id("hlist")]   = node_map.list      ,
-    [id("vlist")]   = node_map.list      ,
-    [id("rule")]    = node_map.color     ,
-    [id("glyph")]   = node_map.color     ,
-    [id("disc")]    = node_map.list_disc ,
+    [id("hlist")]   = id_list      ,
+    [id("vlist")]   = id_list      ,
+    [id("rule")]    = id_color     ,
+    [id("glyph")]   = id_color     ,
+    [id("disc")]    = id_list_disc ,
     [id("whatsit")] = {
         [subtype("pdf_colorstack")] =
-          function(n) return n.stack == 0 and node_map.no_color or nil end ,
-        [subtype("special")]     = node_map.color ,
-        [subtype("pdf_literal")] = node_map.color ,
-        [subtype("pdf_save")]    = node_map.color ,
-        [subtype("pdf_restore")] = node_map.color ,
+          function(n) return n.stack == 0 and id_no_color or nil end ,
+        [subtype("special")]     = id_color ,
+        [subtype("pdf_literal")] = id_color ,
+        [subtype("pdf_save")]    = id_color ,
+        [subtype("pdf_restore")] = id_color ,
       } ,
     [id("glue")] =
       function(n)
         if n.subtype >= 100 then
           if n.leader.id == id("rule") then
-            return node_map.color
+            return id_color
           else
-            return node_map.list_leaders
+            return id_list_leaders
           end
         end
       end
@@ -1428,9 +1435,9 @@ local function traverse(list,color,dry_run)
 %   Work out the type of head we have: should be a |list| or |list_disc|.
 %    \begin{macrocode}
   local head
-  if get_type(list) == node_map.list then
+  if get_type(list) == id_list then
     head = list.head
-  elseif get_type(list) == node_map.list_disc then
+  elseif get_type(list) == id_list_disc then
     head = list.replace
   else
     module_error("l3color","Wrong list type: " .. type(list.id))
@@ -1442,9 +1449,9 @@ local function traverse(list,color,dry_run)
 %    \begin{macrocode}
   for n in node_traverse(head) do
     local t = get_type(n)
-    if t == node_map.list or t == node_map.list_disc then
+    if t == id_list or t == id_list_disc then
       color = traverse(n,color,dry_run)
-    elseif t == node_map.list_leaders then
+    elseif t == id_list_leaders then
       local color_after = traverse(n.leader,color,true)
       if color == color_after then
         traverse(n.leader,color,dry_run)
@@ -1452,7 +1459,7 @@ local function traverse(list,color,dry_run)
         traverse(n.leader,"",dry_run)
         color = ""
       end
-    elseif t == node_map.color then
+    elseif t == id_color then
       local c = has_attribute(n,color_attr)
       if c then
         local new_color = map[c]
@@ -1463,14 +1470,14 @@ local function traverse(list,color,dry_run)
           end
         end
       end
-    elseif t == node_map.no_color then
+    elseif t == id_no_color then
       color = ""
     end
   end
 %    \end{macrocode}
 %   Loop done, set up the list.
 %    \begin{macrocode}
-  if get_type(list) == node_map.list then
+  if get_type(list) == id_list then
     list.head = head
   else
     list.replace = head
