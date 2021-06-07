@@ -1552,21 +1552,31 @@ end
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{\tex_pdfxform:D}
-%   We redefine the \pkg{expl3} version of the primitive to do the replacement
-%   implicitly. The keywords \texttt{margin} and \texttt{type} are not
-%   documented at the \TeX{} level.
+%<@@=pdfxform>
+%
+% \begin{macro}{pdfxform}
+% \begin{macro}{\@@_backend_now:w, \@@_backend_shipout:w}
+%   Here we define an internal for the |pdfxform| module: the
+%   same ideas work in \pdfTeX{} as macros, and other engines don't
+%   use quite the same abstraction.
 %    \begin{macrocode}
-luacmd('tex_pdfxform:D', function()
+local function pdfxform(immediate)
   local attr = scan_keyword'attr' and scan_string() or nil
   local resources = scan_keyword'length' and scan_string() or nil
   local xtype = scan_keyword'type' and scan_string() or nil
   local margin = scan_keyword'margin' and scan_string() or nil
   local n = scan_int() or nil
   traverse(getbox(n),"")
-  saveboxresources(n,attr,resources,false,xtype,margin)
+  saveboxresources(n,attr,resources,immediate,xtype,margin)
+end
+luacmd('@@_backend_now:w', function()
+  pdfxform(true)
+end,'global','protected')
+luacmd('@@_backend_shipout:w', function()
+  pdfxform(false)
 end,'global','protected')
 %    \end{macrocode}
+% \end{macro}
 % \end{macro}
 %
 %    \begin{macrocode}
@@ -1577,6 +1587,8 @@ end,'global','protected')
 %<*package>
 %    \end{macrocode}
 %
+%<@@=color>
+%
 % At present we only set up for \LuaTeX{} in PDF mode: later we will expand
 % on that!
 %
@@ -1584,9 +1596,7 @@ end,'global','protected')
 %<*luatex>
 %    \end{macrocode}
 %
-% This needs some work: undefine from Lua?
 %    \begin{macrocode}
-\cs_undefine:N \tex_pdfxform:D
 \lua_now:n { require("l3backend-luatex") }
 %    \end{macrocode}
 %
