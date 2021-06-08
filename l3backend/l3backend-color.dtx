@@ -1555,7 +1555,7 @@ end
 %<@@=pdfxform>
 %
 % \begin{macro}{pdfxform}
-% \begin{macro}{\@@_backend_now:w, \@@_backend_shipout:w}
+% \begin{macro}{\@@_backend_now:w, \@@_backend_delayed:w}
 %   Here we define an internal for the |pdfxform| module: the
 %   same ideas work in \pdfTeX{} as macros, and other engines don't
 %   use quite the same abstraction.
@@ -1572,7 +1572,7 @@ end
 luacmd('@@_backend_now:w', function()
   pdfxform(true)
 end,'global','protected')
-luacmd('@@_backend_shipout:w', function()
+luacmd('@@_backend_delayed:w', function()
   pdfxform(false)
 end,'global','protected')
 %    \end{macrocode}
