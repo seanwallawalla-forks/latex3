@@ -1407,15 +1407,16 @@ end
 %    \end{macrocode}
 % \end{macro}
 %
-% \begin{macro}{create_node}
-%   Create the the node containing color data. The mode is hard-coded as $2$:
-%   a PDF literal.
+% \begin{macro}{set_color}
+%   Create the the node containing color data and insert it into the list.
+%   The mode is hard-coded as $2$: a PDF literal.
 %    \begin{macrocode}
-local function create_node(color)
-  local color_node = node_new(id("whatsit"),subtype("pdf_literal"))
+local function set_color(head, n, new_color, old_color)
+  if new_color == old_color or not new_color then return head end
+  local color_node = node_new("whatsit","pdf_literal")
   color_node.mode = 2
-  color_node.data = color
-  return color_node
+  color_node.data = new_color
+  return insert_before(head, n, color_node)
 end
 %    \end{macrocode}
 % \end{macro}
@@ -1455,22 +1456,17 @@ local function traverse(list,color,dry_run)
       if color == color_after then
         traverse(n.leader,color,dry_run)
       else
-        traverse(n.leader,"",dry_run)
-        color = ""
+        traverse(n.leader,nil,dry_run)
+        color = nil
       end
     elseif t == id_color then
-      local c = has_attribute(n,color_attr)
-      if c then
-        local new_color = map[c]
-        if new_color ~= color then
-          color = new_color
-          if not dry_run then
-            head = insert_before(head,n,create_node(color))
-          end
-        end
+      local new_color = map[has_attribute(n,color_attr)]
+      if not dry_run then
+        head = set_color(head, n, new_color, color)
       end
+      color = new_color
     elseif t == id_no_color then
-      color = ""
+      color = nil
     end
   end
 %    \end{macrocode}
@@ -1493,7 +1489,7 @@ if luatexbase.callbacktypes.pre_shipout_filter then
   luatexbase.add_to_callback(
     "pre_shipout_filter",
     function(list)
-      traverse(list,"")
+      traverse(list)
       return true
     end,
     "color")
@@ -1566,7 +1562,7 @@ local function pdfxform(immediate)
   local xtype = scan_keyword'type' and scan_string() or nil
   local margin = scan_keyword'margin' and scan_string() or nil
   local n = scan_int() or nil
-  traverse(getbox(n),"")
+  traverse(getbox(n))
   saveboxresources(n,attr,resources,immediate,xtype,margin)
 end
 luacmd('@@_backend_now:w', function()
