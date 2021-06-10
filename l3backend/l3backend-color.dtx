@@ -1293,7 +1293,7 @@ local color_attr = luatexbase.new_attribute("color")
 % \begin{macro}{map}
 %   A map between color strings and their color_index, plus the tracking number.
 %    \begin{macrocode}
-local map = {n = 0}
+local map = {}
 %    \end{macrocode}
 % \end{macro}
 %
@@ -1303,7 +1303,7 @@ local map = {n = 0}
 local function color_index(color)
   local n = map[color]
   if not n then
-    n = map.n + 1
+    n = #map + 1
     map[n] = color
     map[color] = n
   end
@@ -1330,7 +1330,7 @@ local node_new         = node.new
 local node_traverse    = node.traverse
 local saveboxresources = tex.saveboxresources
 local set_attribute    = tex.setattribute
-local type             = node.type
+local node_type        = node.type
 local subtype          = node.subtype
 %    \end{macrocode}
 %
@@ -1439,7 +1439,7 @@ local function traverse(list,color,dry_run)
   elseif get_type(list) == id_list_disc then
     head = list.replace
   else
-    module_error("l3color","Wrong list type: " .. type(list.id))
+    module_error("l3color","Wrong list type: " .. node_type(list.id))
     return color
   end
 %    \end{macrocode}
