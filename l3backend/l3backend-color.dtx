@@ -1327,6 +1327,7 @@ local id               = node.id
 local insert_before    = node.insert_before
 local module_error     = luatexbase.module_error
 local node_new         = node.new
+local node_tail        = node.tail
 local node_traverse    = node.traverse
 local saveboxresources = tex.saveboxresources
 local set_attribute    = tex.setattribute
@@ -1412,11 +1413,24 @@ end
 %   The mode is hard-coded as $2$: a PDF literal.
 %    \begin{macrocode}
 local function set_color(head, n, new_color, old_color)
-  if new_color == old_color or not new_color then return head end
-  local color_node = node_new("whatsit","pdf_literal")
-  color_node.mode = 2
-  color_node.data = new_color
+  if new_color == old_color then return head end
+  local color_node = node_new("whatsit","pdf_colorstack")
+  if new_color then
+    color_node.command = old_color and 0 or 1 -- "set" or "push"
+    color_node.data = new_color
+  else
+    color_node.command = 2 -- "pop"
+  end
+  color_node.attr = n.attr
   return insert_before(head, n, color_node)
+end
+local function clear_color(head, n, old_color)
+  if not old_color then return head end
+  local color_node = node_new("whatsit","pdf_colorstack")
+  color_node.command = 2 -- "pop"
+  if not n then n = node_tail(head) end
+  color_node.attr = n.attr
+  return insert_after(head, n, color_node)
 end
 %    \end{macrocode}
 % \end{macro}
@@ -1424,7 +1438,7 @@ end
 % \begin{macro}{traverse}
 %   The business end of the process: transverse the node list.
 %    \begin{macrocode}
-local function traverse(list,color,dry_run)
+local function traverse(list,color,dry_run,force_reset)
 %    \end{macrocode}
 %   We start with a sanity check: do we have a list at all.
 %    \begin{macrocode}
@@ -1452,13 +1466,12 @@ local function traverse(list,color,dry_run)
     if t == id_list or t == id_list_disc then
       color = traverse(n,color,dry_run)
     elseif t == id_list_leaders then
-      local color_after = traverse(n.leader,color,true)
-      if color == color_after then
-        traverse(n.leader,color,dry_run)
-      else
-        traverse(n.leader,nil,dry_run)
-        color = nil
+      local new_color = color == traverse(n.leader,color,true) and color or nil
+      if not dry_run then
+        head = set_color(head, n, new_color, color)
+        traverse(n.leader,new_color,false,not new_color)
       end
+      color = new_color
     elseif t == id_color then
       local new_color = map[has_attribute(n,color_attr)]
       if not dry_run then
@@ -1466,8 +1479,15 @@ local function traverse(list,color,dry_run)
       end
       color = new_color
     elseif t == id_no_color then
+      if not dry_run then
+        head = set_color(head, n, nil, color)
+      end
       color = nil
     end
+  end
+  if force_reset and color then
+    color = nil
+    head = clear_color(head, nil, color)
   end
 %    \end{macrocode}
 %   Loop done, set up the list.
