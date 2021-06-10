@@ -1371,12 +1371,11 @@ local node_types = {
     [id("glyph")]   = id_color     ,
     [id("disc")]    = id_list_disc ,
     [id("whatsit")] = {
-        [subtype("pdf_colorstack")] =
-          function(n) return n.stack == 0 and id_no_color or nil end ,
-        [subtype("special")]     = id_color ,
-        [subtype("pdf_literal")] = id_color ,
-        [subtype("pdf_save")]    = id_color ,
-        [subtype("pdf_restore")] = id_color ,
+        [subtype("special")]        = id_color ,
+        [subtype("pdf_colorstack")] = id_color ,
+        [subtype("pdf_literal")]    = id_color ,
+        [subtype("pdf_save")]       = id_color ,
+        [subtype("pdf_restore")]    = id_color ,
       } ,
     [id("glue")] =
       function(n)
