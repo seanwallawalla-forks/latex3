@@ -7,6 +7,9 @@ this project uses date-based 'snapshot' version identifiers.
 
 ## [Unreleased]
 
+### Changed
+- Allow indirect conversions between colorspaces though fallback models
+
 ### Fixed
 - DeviceN colorspace conversions with alternative model RGB
 
