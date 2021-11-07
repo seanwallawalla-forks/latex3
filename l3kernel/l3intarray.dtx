@@ -393,24 +393,23 @@ end, 'protected', 'global')
       }
   }
 \cs_generate_variant:Nn \intarray_gset:Nnn { c }
+%</tex>
 %    \end{macrocode}
 % \end{macro}
 %
 % \begin{macro}{\intarray_gzero:N, \intarray_gzero:c}
 %   Set the appropriate \tn{fontdimen} to zero.  No bound checking
-%   needed.  The \cs{prg_replicate:nn} possibly uses quite a lot of
-%   memory, but this is somewhat comparable to the size of the array,
-%   and it is much faster than an \cs{int_step_inline:nn} loop.
+%   needed.
 %    \begin{macrocode}
-\cs_new_protected:Npn \intarray_gzero:N #1
-  {
-    \int_zero:N \l_@@_loop_int
-    \prg_replicate:nn { \intarray_count:N #1 }
-      {
-        \int_incr:N \l_@@_loop_int
-        \@@_gset:wNwF \l_@@_loop_int #1 \c_zero_dim {}
-      }
-  }
+%<*lua>
+luacmd('intarray_gzero:N', function()
+  local t = @@_table()
+  for i=1, #t do
+    t[i] = 0
+  end
+end, 'global', 'protected')
+%</lua>
+%<*tex>
 \cs_generate_variant:Nn \intarray_gzero:N { c }
 %</tex>
 %    \end{macrocode}
