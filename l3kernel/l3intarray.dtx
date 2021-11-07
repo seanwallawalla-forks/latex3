@@ -502,23 +502,15 @@ end, 'global')
 %    \begin{macrocode}
 \cs_new:Npn \intarray_to_clist:N #1 { \@@_to_clist:Nn #1 { , } }
 \cs_generate_variant:Nn \intarray_to_clist:N { c }
-\cs_new:Npn \@@_to_clist:Nn #1#2
-  {
-    \int_compare:nNnF { \intarray_count:N #1 } = \c_zero_int
-      {
-        \exp_last_unbraced:Nf \use_none:n
-          { \@@_to_clist:w 1 ; #1 {#2} \prg_break_point: }
-      }
-  }
-\cs_new:Npn \@@_to_clist:w #1 ; #2#3
-  {
-    \if_int_compare:w #1 > \intarray_count:N #2 ~
-      \prg_break:n
-    \fi:
-    #3 \__kernel_intarray_item:Nn #2 {#1}
-    \exp_after:wN \@@_to_clist:w
-    \int_value:w \int_eval:w #1 + \c_one_int ; #2 {#3}
-  }
+%</tex>
+%<*lua>
+local concat = table.concat
+luacmd('@@_to_clist:Nn', function()
+  local t = @@_table()
+  local sep = token.scan_string()
+  sprint(-2, concat(t, sep))
+end, 'global')
+%</lua>
 %    \end{macrocode}
 % \end{macro}
 % \end{macro}
@@ -526,6 +518,7 @@ end, 'global')
 % \begin{macro}[rEXP]{\__kernel_intarray_range_to_clist:Nnn, \@@_range_to_clist:ww}
 %   Loop through part of the array.
 %    \begin{macrocode}
+%<*tex>
 \cs_new:Npn \__kernel_intarray_range_to_clist:Nnn #1#2#3
   {
     \exp_last_unbraced:Nf \use_none:n
